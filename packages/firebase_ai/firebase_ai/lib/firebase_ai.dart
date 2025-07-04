@@ -105,6 +105,7 @@ export 'src/live_api.dart'
         LiveServerMessage,
         LiveServerContent,
         LiveServerToolCall,
+        Transcription,
         LiveServerToolCallCancellation,
         LiveServerResponse,
         Transcription;
