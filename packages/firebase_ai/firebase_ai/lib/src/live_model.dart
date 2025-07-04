@@ -29,17 +29,19 @@ const _apiUrlSuffixGoogleAI = 'GenerativeService/BidiGenerateContent';
 /// is in Public Preview, which means that the feature is not subject to any SLA
 /// or deprecation policy and could change in backwards-incompatible ways.
 final class LiveGenerativeModel extends BaseModel {
-  LiveGenerativeModel._(
-      {required String model,
-      required String location,
-      required FirebaseApp app,
-      required bool useVertexBackend,
-      FirebaseAppCheck? appCheck,
-      FirebaseAuth? auth,
-      LiveGenerationConfig? liveGenerationConfig,
-      List<Tool>? tools,
-      Content? systemInstruction})
-      : _app = app,
+
+  LiveGenerativeModel._({
+    required String model,
+    required String location,
+    required FirebaseApp app,
+    required bool useVertexBackend,
+    FirebaseAppCheck? appCheck,
+    FirebaseAuth? auth,
+    LiveGenerationConfig? liveGenerationConfig,
+    List<Tool>? tools,
+    Content? systemInstruction,
+    Map<String, dynamic> extraConfig = const {},
+  })  : _app = app,
         _location = location,
         _useVertexBackend = useVertexBackend,
         _appCheck = appCheck,
@@ -47,6 +49,7 @@ final class LiveGenerativeModel extends BaseModel {
         _liveGenerationConfig = liveGenerationConfig,
         _tools = tools,
         _systemInstruction = systemInstruction,
+        _extraConfig = extraConfig,
         super._(
           serializationStrategy: VertexSerialization(),
           modelUri: useVertexBackend
@@ -60,7 +63,6 @@ final class LiveGenerativeModel extends BaseModel {
                   app: app,
                 ),
         );
-
   final FirebaseApp _app;
   final String _location;
   final bool _useVertexBackend;
@@ -69,6 +71,7 @@ final class LiveGenerativeModel extends BaseModel {
   final LiveGenerationConfig? _liveGenerationConfig;
   final List<Tool>? _tools;
   final Content? _systemInstruction;
+  final Map<String, dynamic> _extraConfig;
 
   String _vertexAIUri() => 'wss://${_modelUri.baseAuthority}/'
       '$_apiUrl.${_modelUri.apiVersion}.$_apiUrlSuffixVertexAI/'
@@ -102,6 +105,8 @@ final class LiveGenerativeModel extends BaseModel {
           'generation_config': _liveGenerationConfig.toJson(),
         if (_systemInstruction != null)
           'system_instruction': _systemInstruction.toJson(),
+        for (final entry in _extraConfig.entries)
+          entry.key: entry.value,
         if (_tools != null) 'tools': _tools.map((t) => t.toJson()).toList(),
       }
     };
@@ -131,6 +136,7 @@ LiveGenerativeModel createLiveGenerativeModel({
   LiveGenerationConfig? liveGenerationConfig,
   List<Tool>? tools,
   Content? systemInstruction,
+  Map<String, dynamic> extraConfig = const {},
 }) =>
     LiveGenerativeModel._(
       model: model,
@@ -142,4 +148,5 @@ LiveGenerativeModel createLiveGenerativeModel({
       liveGenerationConfig: liveGenerationConfig,
       tools: tools,
       systemInstruction: systemInstruction,
+      extraConfig: extraConfig,
     );
