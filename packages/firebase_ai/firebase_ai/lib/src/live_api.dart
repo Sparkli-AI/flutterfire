@@ -158,6 +158,7 @@ class LiveServerContent implements LiveServerMessage {
     this.turnComplete,
     this.interrupted,
     this.outputTranscription,
+    this.inputTranscription,
   });
 >>>>>>> 6ab68d259 (feat: allow transcriptions)
 
@@ -188,6 +189,9 @@ class LiveServerContent implements LiveServerMessage {
   /// The output transcription of the generated content.
 >>>>>>> 6ab68d259 (feat: allow transcriptions)
   final Transcription? outputTranscription;
+
+  /// The input transcription of the generated content.
+  final Transcription? inputTranscription;
 }
 
 /// A tool call in a live stream.
@@ -410,7 +414,6 @@ LiveServerMessage _parseServerMessage(Object jsonObject) {
   }
 
   Map<String, dynamic> json = jsonObject as Map<String, dynamic>;
-
   if (json.containsKey('serverContent')) {
     final serverContentJson = json['serverContent'] as Map<String, dynamic>;
     Content? modelTurn;
@@ -443,6 +446,7 @@ LiveServerMessage _parseServerMessage(Object jsonObject) {
       outputTranscription: _parseTranscription('outputTranscription'),
 =======
     Transcription? outputTranscription;
+    Transcription? inputTranscription;
     if (serverContentJson.containsKey('outputTranscription')) {
       final transcriptionJson =
           serverContentJson['outputTranscription'] as Map<String, dynamic>;
@@ -451,11 +455,23 @@ LiveServerMessage _parseServerMessage(Object jsonObject) {
         finished: transcriptionJson['finished'] as bool?,
       );
     }
+    if (serverContentJson.containsKey('inputTranscription')) {
+      final transcriptionJson =
+          serverContentJson['inputTranscription'] as Map<String, dynamic>;
+      inputTranscription = Transcription(
+        text: transcriptionJson['text'] as String?,
+        finished: transcriptionJson['finished'] as bool?,
+      );
+    }
     return LiveServerContent(
       modelTurn: modelTurn,
       turnComplete: turnComplete,
       outputTranscription: outputTranscription,
+<<<<<<< HEAD
 >>>>>>> 6ab68d259 (feat: allow transcriptions)
+=======
+      inputTranscription: inputTranscription,
+>>>>>>> 20e67026b (feat: input transcription)
     );
   } else if (json.containsKey('toolCall')) {
     final toolContentJson = json['toolCall'] as Map<String, dynamic>;
