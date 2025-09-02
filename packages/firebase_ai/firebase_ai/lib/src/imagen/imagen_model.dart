@@ -121,6 +121,7 @@ final class ImagenModel extends BaseApiClientModel {
     List<ImagenReferenceImage> referenceImages,
     String prompt, {
     ImagenEditingConfig? config,
+    String? gcsUri,
   }) =>
       makeRequest(
         Task.predict,
@@ -128,6 +129,7 @@ final class ImagenModel extends BaseApiClientModel {
           referenceImages,
           prompt,
           config: config,
+          gcsUri: gcsUri,
         ),
         (jsonObject) =>
             parseImagenGenerationResponse<ImagenInlineImage>(jsonObject),
@@ -154,12 +156,14 @@ final class ImagenModel extends BaseApiClientModel {
     List<ImagenReferenceImage> images,
     String prompt, {
     ImagenEditingConfig? config,
+    String? gcsUri,
   }) {
     if (!_useVertexBackend) {
       throw FirebaseAIException(
           'Image editing for Imagen is only supported on Vertex AI backend.');
     }
     final parameters = <String, Object?>{
+      if (gcsUri != null) 'storageUri': gcsUri,
       'sampleCount': _generationConfig?.numberOfImages ?? 1,
       if (config?.editMode case final editMode?) 'editMode': editMode.toJson(),
       if (config?.editSteps case final editSteps?)
