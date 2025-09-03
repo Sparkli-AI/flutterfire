@@ -46,8 +46,8 @@ final class ImagenModel extends BaseApiClientModel {
                 : _GoogleAIUri(app: app, model: model),
             client: HttpApiClient(
                 apiKey: app.options.apiKey,
-                requestHeaders: BaseModel.firebaseTokens(
-                    appCheck, auth, app, useLimitedUseAppCheckTokens)));
+                requestHeaders:
+                    BaseModel.firebaseTokens(appCheck, auth, app, useLimitedUseAppCheckTokens)));
 
   final ImagenGenerationConfig? _generationConfig;
   final ImagenSafetySettings? _safetySettings;
@@ -60,12 +60,10 @@ final class ImagenModel extends BaseApiClientModel {
     final parameters = <String, Object?>{
       if (gcsUri != null) 'storageUri': gcsUri,
       'sampleCount': _generationConfig?.numberOfImages ?? 1,
-      if (_generationConfig?.aspectRatio case final aspectRatio?)
-        'aspectRatio': aspectRatio,
+      if (_generationConfig?.aspectRatio case final aspectRatio?) 'aspectRatio': aspectRatio,
       if (_generationConfig?.negativePrompt case final negativePrompt?)
         'negativePrompt': negativePrompt,
-      if (_generationConfig?.addWatermark case final addWatermark?)
-        'addWatermark': addWatermark,
+      if (_generationConfig?.addWatermark case final addWatermark?) 'addWatermark': addWatermark,
       if (_generationConfig?.imageFormat case final imageFormat?)
         'outputOption': imageFormat.toJson(),
       if (_safetySettings?.personFilterLevel case final personFilterLevel?)
@@ -93,8 +91,7 @@ final class ImagenModel extends BaseApiClientModel {
         _generateImagenRequest(
           prompt,
         ),
-        (jsonObject) =>
-            parseImagenGenerationResponse<ImagenInlineImage>(jsonObject),
+        (jsonObject) => parseImagenGenerationResponse<ImagenInlineImage>(jsonObject),
       );
 
   /// Generates images with format of [ImagenGCSImage] based on the given
@@ -111,8 +108,7 @@ final class ImagenModel extends BaseApiClientModel {
           prompt,
           gcsUri: gcsUri,
         ),
-        (jsonObject) =>
-            parseImagenGenerationResponse<ImagenGCSImage>(jsonObject),
+        (jsonObject) => parseImagenGenerationResponse<ImagenGCSImage>(jsonObject),
       );
 
   /// Edits an image based on a prompt and a list of reference images.
@@ -121,7 +117,24 @@ final class ImagenModel extends BaseApiClientModel {
     List<ImagenReferenceImage> referenceImages,
     String prompt, {
     ImagenEditingConfig? config,
-    String? gcsUri,
+  }) =>
+      makeRequest(
+        Task.predict,
+        _generateImagenEditRequest(
+          referenceImages,
+          prompt,
+          config: config,
+        ),
+        (jsonObject) => parseImagenGenerationResponse<ImagenInlineImage>(jsonObject),
+      );
+
+  /// Edits an image based on a prompt and a list of reference images.
+  @experimental
+  Future<ImagenGenerationResponse<ImagenGCSImage>> editImageGCS(
+    List<ImagenReferenceImage> referenceImages,
+    String prompt, {
+    ImagenEditingConfig? config,
+    required String gcsUri,
   }) =>
       makeRequest(
         Task.predict,
@@ -131,8 +144,7 @@ final class ImagenModel extends BaseApiClientModel {
           config: config,
           gcsUri: gcsUri,
         ),
-        (jsonObject) =>
-            parseImagenGenerationResponse<ImagenInlineImage>(jsonObject),
+        (jsonObject) => parseImagenGenerationResponse<ImagenGCSImage>(jsonObject),
       );
 
   /// Inpaints an image based on a prompt and a mask.
@@ -159,19 +171,16 @@ final class ImagenModel extends BaseApiClientModel {
     String? gcsUri,
   }) {
     if (!_useVertexBackend) {
-      throw FirebaseAIException(
-          'Image editing for Imagen is only supported on Vertex AI backend.');
+      throw FirebaseAIException('Image editing for Imagen is only supported on Vertex AI backend.');
     }
     final parameters = <String, Object?>{
       if (gcsUri != null) 'storageUri': gcsUri,
       'sampleCount': _generationConfig?.numberOfImages ?? 1,
       if (config?.editMode case final editMode?) 'editMode': editMode.toJson(),
-      if (config?.editSteps case final editSteps?)
-        'editConfig': {'baseSteps': editSteps},
+      if (config?.editSteps case final editSteps?) 'editConfig': {'baseSteps': editSteps},
       if (_generationConfig?.negativePrompt case final negativePrompt?)
         'negativePrompt': negativePrompt,
-      if (_generationConfig?.addWatermark case final addWatermark?)
-        'addWatermark': addWatermark,
+      if (_generationConfig?.addWatermark case final addWatermark?) 'addWatermark': addWatermark,
       if (_generationConfig?.imageFormat case final imageFormat?)
         'outputOption': imageFormat.toJson(),
       if (_safetySettings?.personFilterLevel case final personFilterLevel?)
@@ -188,8 +197,7 @@ final class ImagenModel extends BaseApiClientModel {
           'referenceImages': images.asMap().entries.map((entry) {
             int index = entry.key;
             var image = entry.value;
-            return image.toJson(
-                referenceIdOverrideIfNull: index + images.length);
+            return image.toJson(referenceIdOverrideIfNull: index + images.length);
           }).toList(),
         }
       ],
