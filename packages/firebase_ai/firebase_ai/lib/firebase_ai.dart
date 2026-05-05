@@ -112,6 +112,8 @@ export 'src/live_api.dart'
         LiveServerSetupComplete,
         Transcription,
         LiveServerToolCallCancellation,
+        ActivityEnd,
+        ActivityStart,
         LiveServerResponse,
         GoingAwayNotice,
         ActivityEnd,
