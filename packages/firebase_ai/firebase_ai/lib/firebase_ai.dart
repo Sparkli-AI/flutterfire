@@ -32,7 +32,9 @@ export 'src/api.dart'
         ResponseModalities,
         SafetyRating,
         SafetySetting,
-        UsageMetadata;
+        UsageMetadata,
+        WebGroundingChunk,
+        ModalityTokenCount;
 export 'src/base_model.dart'
     show
         GenerativeModel,
@@ -105,7 +107,10 @@ export 'src/live_api.dart'
         LiveServerMessage,
         LiveServerContent,
         LiveServerToolCall,
+        LiveServerSetupComplete,
         LiveServerToolCallCancellation,
+        ActivityEnd,
+        ActivityStart,
         LiveServerResponse,
         GoingAwayNotice,
         Transcription;
