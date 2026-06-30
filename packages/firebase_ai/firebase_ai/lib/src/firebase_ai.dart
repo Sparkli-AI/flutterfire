@@ -201,6 +201,7 @@ class FirebaseAI extends FirebasePluginPlatform {
     LiveGenerationConfig? liveGenerationConfig,
     List<Tool>? tools,
     Content? systemInstruction,
+    Map<String, dynamic>? extraConfig,
   }) {
     return createLiveGenerativeModel(
       app: app,
@@ -210,6 +211,7 @@ class FirebaseAI extends FirebasePluginPlatform {
       liveGenerationConfig: liveGenerationConfig,
       tools: tools,
       systemInstruction: systemInstruction,
+      extraConfig: extraConfig ?? {},
       appCheck: appCheck,
       auth: auth,
       useLimitedUseAppCheckTokens: useLimitedUseAppCheckTokens,

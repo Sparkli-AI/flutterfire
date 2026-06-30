@@ -74,6 +74,7 @@ class LiveSession {
     List<Tool>? tools,
     SessionResumptionConfig? sessionResumption,
     LiveGenerationConfig? liveGenerationConfig,
+    Map<String, dynamic> extraConfig = const {},
   }) async {
     final ws = await _performWebSocketSetup(
       uri: uri,
@@ -83,6 +84,7 @@ class LiveSession {
       tools: tools,
       sessionResumption: sessionResumption,
       liveGenerationConfig: liveGenerationConfig,
+      extraConfig: extraConfig,
     );
     return LiveSession._(
       ws,
@@ -107,33 +109,29 @@ class LiveSession {
   StreamController<LiveServerResponse> _messageController;
   late StreamSubscription _wsSubscription;
 
-  static Future<WebSocketChannel> _performWebSocketSetup({
-    required String uri,
-    required Map<String, String> headers,
-    required String modelString,
-    Content? systemInstruction,
-    List<Tool>? tools,
-    SessionResumptionConfig? sessionResumption,
-    LiveGenerationConfig? liveGenerationConfig,
-  }) async {
+  static Future<WebSocketChannel> _performWebSocketSetup(
+      {required String uri,
+      required Map<String, String> headers,
+      required String modelString,
+      Content? systemInstruction,
+      List<Tool>? tools,
+      SessionResumptionConfig? sessionResumption,
+      LiveGenerationConfig? liveGenerationConfig,
+      Map<String, dynamic> extraConfig =  const {}}) async {
     final setupJson = {
       'setup': {
         'model': modelString,
-        if (systemInstruction != null)
-          'system_instruction': systemInstruction.toJson(),
+        if (systemInstruction != null) 'system_instruction': systemInstruction.toJson(),
+        for (final entry in extraConfig.entries) entry.key: entry.value,
         if (tools != null) 'tools': tools.map((t) => t.toJson()).toList(),
-        if (sessionResumption != null)
-          'session_resumption': sessionResumption.toJson(),
+        if (sessionResumption != null) 'session_resumption': sessionResumption.toJson(),
         if (liveGenerationConfig != null) ...{
           'generation_config': liveGenerationConfig.toJson(),
           if (liveGenerationConfig.inputAudioTranscription != null)
-            'input_audio_transcription':
-                liveGenerationConfig.inputAudioTranscription!.toJson(),
+            'input_audio_transcription': liveGenerationConfig.inputAudioTranscription!.toJson(),
           if (liveGenerationConfig.outputAudioTranscription != null)
-            'output_audio_transcription':
-                liveGenerationConfig.outputAudioTranscription!.toJson(),
-          if (liveGenerationConfig.contextWindowCompression
-              case final contextWindowCompression?)
+            'output_audio_transcription': liveGenerationConfig.outputAudioTranscription!.toJson(),
+          if (liveGenerationConfig.contextWindowCompression case final contextWindowCompression?)
             'contextWindowCompression': contextWindowCompression.toJson()
         },
       }
@@ -153,8 +151,7 @@ class LiveSession {
     _wsSubscription = _ws.stream.listen(
       (message) {
         try {
-          final String jsonString =
-              message is String ? message : utf8.decode(message as List<int>);
+          final String jsonString = message is String ? message : utf8.decode(message as List<int>);
           var response = json.decode(jsonString);
 
           if (!_messageController.isClosed) {
@@ -164,8 +161,7 @@ class LiveSession {
           if (!_messageController.isClosed && _messageController.hasListener) {
             _messageController.addError(e);
           } else {
-            log('live_session: Dropped parse error because no listeners',
-                error: e);
+            log('live_session: Dropped parse error because no listeners', error: e);
           }
         }
       },
@@ -173,8 +169,7 @@ class LiveSession {
         if (!_messageController.isClosed && _messageController.hasListener) {
           _messageController.addError(error);
         } else {
-          log('live_session: Dropped stream error because no listeners',
-              error: error);
+          log('live_session: Dropped stream error because no listeners', error: error);
         }
       },
       onDone: () {
@@ -193,11 +188,9 @@ class LiveSession {
   ///
   /// [sessionResumption] (optional): The configuration for session resumption,
   /// such as the handle to the previous session state to restore.
-  Future<void> resumeSession(
-      {SessionResumptionConfig? sessionResumption}) async {
+  Future<void> resumeSession({SessionResumptionConfig? sessionResumption}) async {
     try {
-      await _wsSubscription.cancel().timeout(const Duration(seconds: 2),
-          onTimeout: () {
+      await _wsSubscription.cancel().timeout(const Duration(seconds: 2), onTimeout: () {
         log('live_session.resumeSession: WebSocket subscription cancel timed out.',
             error: TimeoutException('Cancel timed out'));
       });
@@ -242,10 +235,8 @@ class LiveSession {
   /// Sends tool responses for function calling to the server.
   ///
   /// [functionResponses] (optional): The list of function responses.
-  Future<void> sendToolResponse(
-      List<FunctionResponse>? functionResponses) async {
-    final toolResponse =
-        LiveClientToolResponse(functionResponses: functionResponses);
+  Future<void> sendToolResponse(List<FunctionResponse>? functionResponses) async {
+    final toolResponse = LiveClientToolResponse(functionResponses: functionResponses);
     _checkWsStatus();
     var clientJson = jsonEncode(toolResponse.toJson());
     _ws.sink.add(clientJson);
@@ -287,11 +278,35 @@ class LiveSession {
     _ws.sink.add(clientJson);
   }
 
+  /// User input that is sent in real time.
+  ///
+  /// The different modalities (audio, video and text) are handled as concurrent streams.
+  /// The ordering across these streams is not guaranteed.
+  Future<void> sendRealtimeInput({
+    InlineDataPart? audio,
+    InlineDataPart? video,
+    String? text,
+    ActivityStart? activityStart,
+    ActivityEnd? activityEnd,
+    bool? audioStreamEnd,
+  }) async {
+    _checkWsStatus();
+    var clientMessage = LiveClientRealtimeInput(
+      audio: audio,
+      video: video,
+      text: text,
+      activityStart: activityStart,
+      activityEnd: activityEnd,
+      audioStreamEnd: audioStreamEnd,
+    );
+    var clientJson = jsonEncode(clientMessage.toJson());
+    _ws.sink.add(clientJson);
+  }
+
   /// Sends realtime input (media chunks) to the server.
   ///
   /// [mediaChunks]: The list of media chunks to send.
-  @Deprecated(
-      'Use sendAudioRealtime, sendVideoRealtime, or sendTextRealtime instead')
+  @Deprecated('Use sendAudioRealtime, sendVideoRealtime, or sendTextRealtime instead')
   Future<void> sendMediaChunks({
     required List<InlineDataPart> mediaChunks,
   }) async {
@@ -347,10 +362,8 @@ class LiveSession {
   /// Closes the WebSocket connection.
   Future<void> close() async {
     try {
-      await _wsSubscription.cancel().timeout(const Duration(seconds: 1),
-          onTimeout: () {
-        log('live_session.close: cancel timed out',
-            error: TimeoutException('Cancel timed out'));
+      await _wsSubscription.cancel().timeout(const Duration(seconds: 1), onTimeout: () {
+        log('live_session.close: cancel timed out', error: TimeoutException('Cancel timed out'));
       });
       if (!_messageController.isClosed) {
         await _messageController.close();

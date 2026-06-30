@@ -39,7 +39,8 @@ final class LiveGenerativeModel extends BaseModel {
       FirebaseAuth? auth,
       LiveGenerationConfig? liveGenerationConfig,
       List<Tool>? tools,
-      Content? systemInstruction})
+      Content? systemInstruction,
+       Map<String, dynamic> extraConfig = const {},})
       : _app = app,
         _location = location,
         _useVertexBackend = useVertexBackend,
@@ -49,6 +50,7 @@ final class LiveGenerativeModel extends BaseModel {
         _tools = tools,
         _systemInstruction = systemInstruction,
         _useLimitedUseAppCheckTokens = useLimitedUseAppCheckTokens,
+        _extraConfig = extraConfig,
         super._(
           serializationStrategy: VertexSerialization(),
           modelUri: useVertexBackend
@@ -62,7 +64,6 @@ final class LiveGenerativeModel extends BaseModel {
                   app: app,
                 ),
         );
-
   final FirebaseApp _app;
   final String _location;
   final bool _useVertexBackend;
@@ -72,6 +73,7 @@ final class LiveGenerativeModel extends BaseModel {
   final List<Tool>? _tools;
   final Content? _systemInstruction;
   final bool? _useLimitedUseAppCheckTokens;
+  final Map<String, dynamic> _extraConfig;
 
   String _vertexAIUri() => 'wss://${_modelUri.baseAuthority}/'
       '$_apiUrl.${_modelUri.apiVersion}.$_apiUrlSuffixVertexAI/'
@@ -116,6 +118,7 @@ final class LiveGenerativeModel extends BaseModel {
       tools: _tools,
       sessionResumption: sessionResumption,
       liveGenerationConfig: _liveGenerationConfig,
+      extraConfig: _extraConfig,
     );
   }
 }
@@ -132,6 +135,7 @@ LiveGenerativeModel createLiveGenerativeModel({
   LiveGenerationConfig? liveGenerationConfig,
   List<Tool>? tools,
   Content? systemInstruction,
+  Map<String, dynamic> extraConfig = const {},
 }) =>
     LiveGenerativeModel._(
       model: model,
@@ -144,4 +148,5 @@ LiveGenerativeModel createLiveGenerativeModel({
       liveGenerationConfig: liveGenerationConfig,
       tools: tools,
       systemInstruction: systemInstruction,
+      extraConfig: extraConfig,
     );
