@@ -22,16 +22,20 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 class FakeWebSocketChannel implements WebSocketChannel {
   final StreamController _controller = StreamController();
+  final FakeWebSocketSink fakeSink = FakeWebSocketSink();
 
   @override
   Stream get stream => _controller.stream;
 
   @override
-  WebSocketSink get sink => throw UnimplementedError();
+  WebSocketSink get sink => fakeSink;
 
   void emit(dynamic message) => _controller.add(message);
 
-  void close() => _controller.close();
+  void close() {
+    unawaited(_controller.close());
+    unawaited(fakeSink.close());
+  }
 
   @override
   int? get closeCode => null;
@@ -49,8 +53,56 @@ class FakeWebSocketChannel implements WebSocketChannel {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class FakeWebSocketSink implements WebSocketSink {
+  final List<dynamic> messages = [];
+
+  @override
+  void add(dynamic data) => messages.add(data);
+
+  @override
+  Future<void> close([int? closeCode, String? closeReason]) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   group('LiveSession Tests', () {
+    test('sends activity controls as realtime JSON', () async {
+      final fakeWs = FakeWebSocketChannel();
+      final session = LiveSession.forTesting(fakeWs);
+      addTearDown(() async {
+        await session.close();
+        fakeWs.close();
+      });
+
+      await session.sendStartActivityRealtime();
+      await session.sendStopActivityRealtime();
+      await session.sendAudioStreamEndRealtime();
+
+      expect(
+        fakeWs.fakeSink.messages
+            .map((message) => jsonDecode(message as String)),
+        [
+          {
+            'realtime_input': {
+              'activity_start': <String, dynamic>{},
+            },
+          },
+          {
+            'realtime_input': {
+              'activity_end': <String, dynamic>{},
+            },
+          },
+          {
+            'realtime_input': {
+              'audio_stream_end': true,
+            },
+          },
+        ],
+      );
+    });
+
     test('processes String messages from WebSocket on Web', () async {
       final fakeWs = FakeWebSocketChannel();
       final session = LiveSession.forTesting(fakeWs);

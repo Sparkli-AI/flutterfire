@@ -229,11 +229,16 @@ class FirebaseAI extends FirebasePlugin {
   ///
   /// The optional [liveGenerationConfig] can be used to control and guide the
   /// generation. See [LiveGenerationConfig] for details.
+  ///
+  /// [extraConfig] adds fields to the Live API setup payload that are not yet
+  /// represented by this package's typed API. Values must be JSON-encodable;
+  /// fields represented by typed parameters take precedence.
   LiveGenerativeModel liveGenerativeModel({
     required String model,
     LiveGenerationConfig? liveGenerationConfig,
     List<Tool>? tools,
     Content? systemInstruction,
+    Map<String, Object?> extraConfig = const {},
   }) {
     return createLiveGenerativeModel(
       app: app,
@@ -243,6 +248,7 @@ class FirebaseAI extends FirebasePlugin {
       liveGenerationConfig: liveGenerationConfig,
       tools: tools,
       systemInstruction: systemInstruction,
+      extraConfig: extraConfig,
       appCheck: appCheck,
       auth: auth,
       useLimitedUseAppCheckTokens: useLimitedUseAppCheckTokens,
