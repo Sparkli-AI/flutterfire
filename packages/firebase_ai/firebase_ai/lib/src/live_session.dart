@@ -37,12 +37,14 @@ class LiveSession {
     Content? systemInstruction,
     List<Tool>? tools,
     LiveGenerationConfig? liveGenerationConfig,
+    Map<String, Object?> extraConfig = const {},
   })  : _uri = uri,
         _headers = headers,
         _modelString = modelString,
         _systemInstruction = systemInstruction,
         _tools = tools,
         _liveGenerationConfig = liveGenerationConfig,
+        _extraConfig = extraConfig,
         _messageController = StreamController<LiveServerResponse>.broadcast() {
     _listenToWebSocket();
   }
@@ -74,6 +76,7 @@ class LiveSession {
     List<Tool>? tools,
     SessionResumptionConfig? sessionResumption,
     LiveGenerationConfig? liveGenerationConfig,
+    Map<String, Object?> extraConfig = const {},
   }) async {
     final ws = await _performWebSocketSetup(
       uri: uri,
@@ -83,6 +86,7 @@ class LiveSession {
       tools: tools,
       sessionResumption: sessionResumption,
       liveGenerationConfig: liveGenerationConfig,
+      extraConfig: extraConfig,
     );
     return LiveSession._(
       ws,
@@ -92,6 +96,7 @@ class LiveSession {
       systemInstruction: systemInstruction,
       tools: tools,
       liveGenerationConfig: liveGenerationConfig,
+      extraConfig: extraConfig,
     );
   }
 
@@ -102,6 +107,7 @@ class LiveSession {
   final Content? _systemInstruction;
   final List<Tool>? _tools;
   final LiveGenerationConfig? _liveGenerationConfig;
+  final Map<String, Object?> _extraConfig;
 
   WebSocketChannel _ws;
   StreamController<LiveServerResponse> _messageController;
@@ -115,9 +121,11 @@ class LiveSession {
     List<Tool>? tools,
     SessionResumptionConfig? sessionResumption,
     LiveGenerationConfig? liveGenerationConfig,
+    Map<String, Object?> extraConfig = const {},
   }) async {
     final setupJson = {
       'setup': {
+        ...extraConfig,
         'model': modelString,
         if (systemInstruction != null)
           'system_instruction': systemInstruction.toJson(),
@@ -217,6 +225,7 @@ class LiveSession {
         tools: _tools,
         sessionResumption: sessionResumption,
         liveGenerationConfig: _liveGenerationConfig,
+        extraConfig: _extraConfig,
       );
     } catch (e) {
       log('live_session.resumeSession: WebSocket setup failed', error: e);
@@ -319,6 +328,16 @@ class LiveSession {
   Future<void> sendStopActivityRealtime() async {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.activityEnd();
+    var clientJson = jsonEncode(clientMessage.toJson());
+    _ws.sink.add(clientJson);
+  }
+
+  /// Signals that the current audio stream has ended.
+  ///
+  /// This should only be used when automatic activity detection is enabled.
+  Future<void> sendAudioStreamEndRealtime() async {
+    _checkWsStatus();
+    var clientMessage = LiveClientRealtimeInput.audioStreamEnd();
     var clientJson = jsonEncode(clientMessage.toJson());
     _ws.sink.add(clientJson);
   }

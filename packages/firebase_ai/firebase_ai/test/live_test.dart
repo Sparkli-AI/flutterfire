@@ -13,6 +13,7 @@
 // limitations under the License.
 import 'dart:convert';
 
+import 'package:firebase_ai/firebase_ai.dart' as public_api;
 import 'package:firebase_ai/src/api.dart';
 import 'package:firebase_ai/src/content.dart';
 import 'package:firebase_ai/src/error.dart';
@@ -22,6 +23,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('LiveAPI Tests', () {
+    test('custom live API types are publicly exported', () {
+      final tokenCount = public_api.ModalityTokenCount(
+        public_api.ContentModality.text,
+        1,
+      );
+      expect(tokenCount, isA<ModalityTokenCount>());
+      expect(tokenCount.modality, ContentModality.text);
+      expect(
+        public_api.LiveServerSetupComplete(),
+        isA<LiveServerSetupComplete>(),
+      );
+    });
+
     test('SpeechConfig toJson() returns correct JSON', () {
       final speechConfigWithVoice = SpeechConfig(voiceName: 'Aoede');
       expect(speechConfigWithVoice.toJson(), {
@@ -447,6 +461,56 @@ void main() {
         'realtime_input': {
           'activity_end': {},
         },
+      });
+    });
+
+    test('parseServerMessage parses usage metadata', () {
+      final response = parseServerResponse({
+        'serverContent': {'turnComplete': true},
+        'usageMetadata': {
+          'promptTokenCount': 10,
+          'candidatesTokenCount': 25,
+          'totalTokenCount': 35,
+          'promptTokensDetails': [
+            {'modality': 'TEXT', 'tokenCount': 10},
+          ],
+        },
+      });
+
+      expect(response.usageMetadata, isNotNull);
+      expect(response.usageMetadata!.promptTokenCount, 10);
+      expect(response.usageMetadata!.candidatesTokenCount, 25);
+      expect(response.usageMetadata!.totalTokenCount, 35);
+      expect(
+        response.usageMetadata!.promptTokensDetails!.single.modality,
+        ContentModality.text,
+      );
+      expect(
+        response.usageMetadata!.promptTokensDetails!.single.tokenCount,
+        10,
+      );
+    });
+
+    test('usage metadata is optional', () {
+      final response = parseServerResponse({'setupComplete': {}});
+      expect(response.message, isA<LiveServerSetupComplete>());
+      expect(response.usageMetadata, isNull);
+    });
+
+    test('usage metadata survives an unrecognized server message', () {
+      final response = parseServerResponse({
+        'unknown': {},
+        'usageMetadata': {'totalTokenCount': 35},
+      });
+      expect(response.usageMetadata?.totalTokenCount, 35);
+    });
+
+    test('audio-stream-end signal serializes without other input fields', () {
+      expect(LiveClientRealtimeInput.audioStreamEnd().toJson(), {
+        'realtime_input': {'audio_stream_end': true},
+      });
+      expect(LiveClientRealtimeInput().toJson(), {
+        'realtime_input': <String, dynamic>{},
       });
     });
   });
