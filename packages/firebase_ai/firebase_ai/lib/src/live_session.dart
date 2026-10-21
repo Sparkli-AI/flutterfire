@@ -39,6 +39,7 @@ class LiveSession {
     List<Tool>? tools,
     LiveGenerationConfig? liveGenerationConfig,
     Map<String, Object?> extraConfig = const {},
+    bool useEphemeralToken = false,
   })  : _uri = uri,
         _headers = headers,
         _modelString = modelString,
@@ -46,18 +47,58 @@ class LiveSession {
         _tools = tools,
         _liveGenerationConfig = liveGenerationConfig,
         _extraConfig = extraConfig,
+        _useEphemeralToken = useEphemeralToken,
         _messageController = StreamController<LiveServerResponse>.broadcast() {
     _listenToWebSocket();
   }
 
   /// Internal constructor for testing.
   @visibleForTesting
-  factory LiveSession.forTesting(WebSocketChannel ws) {
+  factory LiveSession.forTesting(WebSocketChannel ws,
+      {bool useEphemeralToken = false}) {
     return LiveSession._(
       ws,
       uri: '',
       headers: {},
       modelString: '',
+      useEphemeralToken: useEphemeralToken,
+    );
+  }
+
+  /// Connects directly to the Gemini Live API with a constrained ephemeral token.
+  ///
+  /// Mint [token] on a trusted server with the model and session configuration
+  /// locked into the token. Only [model] is sent in the client setup. Never pass
+  /// a long-lived API key. Both a bare model ID and `models/` resource are accepted.
+  ///
+  /// This connection does not use Firebase Auth or App Check. Verify them on the
+  /// server before minting the token. Connection errors omit provider details
+  /// because they can contain the token. To reconnect, mint a fresh token and
+  /// call this method again; [resumeSession] is unavailable for these sessions.
+  static Future<LiveSession> connectWithEphemeralToken({
+    required String token,
+    required String model,
+  }) async {
+    if (!token.startsWith('auth_tokens/') ||
+        token.length == 'auth_tokens/'.length ||
+        token.contains(RegExp(r'\s'))) {
+      throw ArgumentError('Expected a Gemini Live ephemeral token.');
+    }
+    if (!RegExp(r'^(?:models/)?[a-zA-Z0-9][a-zA-Z0-9._-]*$').hasMatch(model)) {
+      throw ArgumentError('Expected a Gemini Live model ID.');
+    }
+    final uri = Uri(
+      scheme: 'wss',
+      host: 'generativelanguage.googleapis.com',
+      path: '/ws/google.ai.generativelanguage.v1beta.GenerativeService.'
+          'BidiGenerateContentConstrained',
+      queryParameters: {'access_token': token},
+    );
+    return create(
+      uri: uri.toString(),
+      headers: const {},
+      modelString: model.startsWith('models/') ? model : 'models/$model',
+      useEphemeralToken: true,
     );
   }
 
@@ -84,17 +125,24 @@ class LiveSession {
     SessionResumptionConfig? sessionResumption,
     LiveGenerationConfig? liveGenerationConfig,
     Map<String, Object?> extraConfig = const {},
+    bool useEphemeralToken = false,
   }) async {
-    final ws = await _performWebSocketSetup(
-      uri: uri,
-      headers: headers,
-      modelString: modelString,
-      systemInstruction: systemInstruction,
-      tools: tools,
-      sessionResumption: sessionResumption,
-      liveGenerationConfig: liveGenerationConfig,
-      extraConfig: extraConfig,
-    );
+    final WebSocketChannel ws;
+    try {
+      ws = await _performWebSocketSetup(
+        uri: uri,
+        headers: headers,
+        modelString: modelString,
+        systemInstruction: systemInstruction,
+        tools: tools,
+        sessionResumption: sessionResumption,
+        liveGenerationConfig: liveGenerationConfig,
+        extraConfig: extraConfig,
+      );
+    } on Object {
+      if (!useEphemeralToken) rethrow;
+      throw LiveWebSocketClosedException('The Live API connection failed.');
+    }
     return LiveSession._(
       ws,
       uri: uri,
@@ -104,6 +152,7 @@ class LiveSession {
       tools: tools,
       liveGenerationConfig: liveGenerationConfig,
       extraConfig: extraConfig,
+      useEphemeralToken: useEphemeralToken,
     );
   }
 
@@ -115,6 +164,7 @@ class LiveSession {
   final List<Tool>? _tools;
   final LiveGenerationConfig? _liveGenerationConfig;
   final Map<String, Object?> _extraConfig;
+  final bool _useEphemeralToken;
 
   WebSocketChannel _ws;
   StreamController<LiveServerResponse> _messageController;
@@ -190,19 +240,19 @@ class LiveSession {
           }
         } catch (e) {
           if (!_messageController.isClosed && _messageController.hasListener) {
-            _messageController.addError(e);
+            _messageController.addError(_connectionError(e));
           } else {
             log('live_session: Dropped parse error because no listeners',
-                error: e);
+                error: _connectionError(e));
           }
         }
       },
       onError: (error) {
         if (!_messageController.isClosed && _messageController.hasListener) {
-          _messageController.addError(error);
+          _messageController.addError(_connectionError(error));
         } else {
           log('live_session: Dropped stream error because no listeners',
-              error: error);
+              error: _connectionError(error));
         }
       },
       onDone: () {
@@ -223,6 +273,9 @@ class LiveSession {
   /// such as the handle to the previous session state to restore.
   Future<void> resumeSession(
       {SessionResumptionConfig? sessionResumption}) async {
+    if (_useEphemeralToken) {
+      throw StateError('Mint a fresh ephemeral token to reconnect.');
+    }
     try {
       await _wsSubscription.cancel().timeout(const Duration(seconds: 2),
           onTimeout: () {
@@ -265,7 +318,7 @@ class LiveSession {
         ? LiveClientContent(turns: [input], turnComplete: turnComplete)
         : LiveClientContent(turnComplete: turnComplete);
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Sends tool responses for function calling to the server.
@@ -277,7 +330,7 @@ class LiveSession {
         LiveClientToolResponse(functionResponses: functionResponses);
     _checkWsStatus();
     var clientJson = jsonEncode(toolResponse.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Sends audio data to the server in realtime.
@@ -289,7 +342,7 @@ class LiveSession {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.audio(audio);
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Sends video data to the server in realtime.
@@ -301,7 +354,7 @@ class LiveSession {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.video(video);
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Sends text data to the server in realtime.
@@ -313,7 +366,7 @@ class LiveSession {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.text(text);
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Manually marks the start of user activity, using the realtime API.
@@ -331,7 +384,7 @@ class LiveSession {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.activityStart();
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Manually marks the end of user activity, using the realtime API.
@@ -346,7 +399,7 @@ class LiveSession {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.activityEnd();
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Signals that the current audio stream has ended.
@@ -356,7 +409,7 @@ class LiveSession {
     _checkWsStatus();
     var clientMessage = LiveClientRealtimeInput.audioStreamEnd();
     var clientJson = jsonEncode(clientMessage.toJson());
-    _ws.sink.add(clientJson);
+    _send(clientJson);
   }
 
   /// Receives messages from the server.
@@ -386,12 +439,29 @@ class LiveSession {
     try {
       await close().timeout(_closeTimeout);
     } catch (e) {
-      log('live_session.close: $resource cleanup failed', error: e);
+      log('live_session.close: $resource cleanup failed',
+          error: _connectionError(e));
+    }
+  }
+
+  Object _connectionError(Object error) => _useEphemeralToken
+      ? LiveWebSocketClosedException('The Live API connection failed.')
+      : error;
+
+  void _send(String message) {
+    try {
+      _ws.sink.add(message);
+    } on Object {
+      if (!_useEphemeralToken) rethrow;
+      throw LiveWebSocketClosedException('The Live API connection failed.');
     }
   }
 
   void _checkWsStatus() {
     if (_ws.closeCode != null) {
+      if (_useEphemeralToken) {
+        throw LiveWebSocketClosedException('The Live API connection closed.');
+      }
       var message =
           'WebSocket Closed, closeCode: ${_ws.closeCode}, closeReason: ${_ws.closeReason}';
 
