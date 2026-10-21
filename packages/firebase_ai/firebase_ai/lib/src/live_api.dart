@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import 'dart:developer';
 
 import 'api.dart';
 import 'content.dart';
@@ -628,6 +627,14 @@ class LiveClientToolResponse {
 /// - A [LiveServerResponse] object representing the parsed message.
 LiveServerResponse parseServerResponse(Object jsonObject) {
   final usageMetadata = switch (jsonObject) {
+    {'usageMetadata': final Map<String, dynamic> usageMetadata} =>
+      parseUsageMetadata({
+        ...usageMetadata,
+        if (!usageMetadata.containsKey('candidatesTokenCount'))
+          'candidatesTokenCount': usageMetadata['responseTokenCount'],
+        if (!usageMetadata.containsKey('candidatesTokensDetails'))
+          'candidatesTokensDetails': usageMetadata['responseTokensDetails'],
+      }),
     {'usageMetadata': final Object usageMetadata} =>
       parseUsageMetadata(usageMetadata),
     _ => null,
@@ -711,7 +718,6 @@ LiveServerMessage _parseServerMessage(Object jsonObject) {
           sessionResumptionUpdateJson['lastConsumedClientMessageIndex'] as int?,
     );
   } else {
-    log('Ignoring unrecognized LiveServerMessage: ${json.keys}');
     return const _UnknownLiveServerMessage();
   }
 }

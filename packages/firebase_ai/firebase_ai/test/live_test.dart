@@ -23,6 +23,61 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('LiveAPI Tests', () {
+    test('parses direct Live usage on a usage-only message', () {
+      final response = parseServerResponse({
+        'usageMetadata': {
+          'promptTokenCount': 10,
+          'responseTokenCount': 25,
+          'totalTokenCount': 35,
+          'responseTokensDetails': [
+            {'modality': 'AUDIO', 'tokenCount': 25},
+          ],
+        },
+      });
+
+      expect(response.usageMetadata?.promptTokenCount, 10);
+      expect(response.usageMetadata?.candidatesTokenCount, 25);
+      expect(response.usageMetadata?.totalTokenCount, 35);
+      expect(response.usageMetadata?.candidatesTokensDetails?.single.modality,
+          ContentModality.audio);
+      expect(response.usageMetadata?.candidatesTokensDetails?.single.tokenCount,
+          25);
+    });
+
+    test('keeps existing SDK usage fields when direct aliases are also present',
+        () {
+      final response = parseServerResponse({
+        'usageMetadata': {
+          'responseTokenCount': 25,
+          'candidatesTokenCount': 30,
+          'responseTokensDetails': [
+            {'modality': 'AUDIO', 'tokenCount': 25},
+          ],
+          'candidatesTokensDetails': [
+            {'modality': 'TEXT', 'tokenCount': 30},
+          ],
+        },
+      });
+
+      expect(response.usageMetadata?.candidatesTokenCount, 30);
+      expect(response.usageMetadata?.candidatesTokensDetails?.single.modality,
+          ContentModality.text);
+      expect(response.usageMetadata?.candidatesTokensDetails?.single.tokenCount,
+          30);
+    });
+
+    test('rejects malformed Live usage metadata', () {
+      for (final value in <Object>['invalid', <Object?>[]]) {
+        expect(
+          () => parseServerResponse({
+            'setupComplete': {},
+            'usageMetadata': value,
+          }),
+          throwsA(isA<FirebaseAISdkException>()),
+        );
+      }
+    });
+
     test('custom live API types are publicly exported', () {
       final tokenCount = public_api.ModalityTokenCount(
         public_api.ContentModality.text,
