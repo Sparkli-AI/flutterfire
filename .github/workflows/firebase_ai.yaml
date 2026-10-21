@@ -1,0 +1,66 @@
+name: firebase-ai-tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - 'packages/firebase_ai/**'
+      - '.github/workflows/firebase_ai.yaml'
+  push:
+    branches:
+      - main
+      - sparkli-main
+      - firebase-ai-v.4.0.0-sparkli
+    paths:
+      - 'packages/firebase_ai/**'
+      - '.github/workflows/firebase_ai.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Firebase AI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.4'
+      - name: Isolate the package with Odyssey's Firebase dependencies
+        run: |
+          package_root="$RUNNER_TEMP/firebase-ai-tests"
+          mkdir -p "$package_root/firebase_ai"
+          git archive HEAD:packages/firebase_ai/firebase_ai | tar -x -C "$package_root/firebase_ai"
+          cp packages/firebase_ai/{analysis_options.yaml,all_lint_rules.yaml} "$package_root/firebase_ai/"
+          # Keep the SDK's real ranges: this small workspace resolves only
+          # published Firebase packages, without the monorepo's local plugins.
+          cat > "$package_root/pubspec.yaml" <<EOF
+          name: firebase_ai_tests
+          environment:
+            sdk: '^3.6.0'
+          workspace:
+            - firebase_ai
+          dependencies:
+            firebase_core: '4.15.0'
+            firebase_auth: '6.7.0'
+            firebase_app_check: '0.4.8'
+          EOF
+      - name: Resolve dependencies
+        working-directory: ${{ runner.temp }}/firebase-ai-tests
+        run: flutter pub get --no-example
+      - name: Analyze
+        working-directory: ${{ runner.temp }}/firebase-ai-tests/firebase_ai
+        run: flutter analyze --no-pub lib test
+      - name: Unit tests
+        working-directory: ${{ runner.temp }}/firebase-ai-tests/firebase_ai
+        run: flutter test --no-pub --reporter expanded test
+      - name: Live browser tests
+        working-directory: ${{ runner.temp }}/firebase-ai-tests/firebase_ai
+        run: flutter test --no-pub --platform chrome --reporter expanded test/live*_test.dart
