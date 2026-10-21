@@ -95,8 +95,8 @@ void main() {
       final result = await completer.future.timeout(const Duration(seconds: 5));
       expect(result, isTrue);
 
-      await subscription.cancel();
       fakeWs.close();
+      await subscription.cancel();
     });
 
     test('processes List<int> messages from WebSocket', () async {
@@ -118,8 +118,8 @@ void main() {
       final result = await completer.future.timeout(const Duration(seconds: 5));
       expect(result, isTrue);
 
-      await subscription.cancel();
       fakeWs.close();
+      await subscription.cancel();
     });
 
     test('receive stays open across a voiceActivity frame', () async {
@@ -165,8 +165,8 @@ void main() {
       expect(errors, isEmpty);
       expect(done, isFalse);
 
-      await subscription.cancel();
       fakeWs.close();
+      await subscription.cancel();
     });
 
     test('receive stays open after an unrecognized frame', () async {
@@ -206,8 +206,8 @@ void main() {
       expect(errors, isEmpty);
       expect(done, isFalse);
 
-      await subscription.cancel();
       fakeWs.close();
+      await subscription.cancel();
     });
 
     test('sendStartActivityRealtime sends correct activity_start message',
@@ -240,6 +240,24 @@ void main() {
           'activity_end': {},
         },
       });
+    });
+
+    test('sendAudioStreamEndRealtime sends the audio_stream_end signal',
+        () async {
+      final fakeWs = FakeWebSocketChannel();
+      final session = LiveSession.forTesting(fakeWs);
+      addTearDown(() async {
+        await session.close();
+        fakeWs.close();
+      });
+
+      await session.sendAudioStreamEndRealtime();
+
+      expect(fakeWs.sentMessages.map((data) => jsonDecode(data as String)), [
+        {
+          'realtime_input': {'audio_stream_end': true}
+        },
+      ]);
     });
   });
 }
