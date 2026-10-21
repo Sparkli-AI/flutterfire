@@ -60,6 +60,12 @@ class LiveSession {
     );
   }
 
+  // Bound connection setup independently of server setup acknowledgement.
+  static const _connectionTimeout = Duration(seconds: 10);
+
+  // Cleanup must finish even when a peer or paused listener does not respond.
+  static const _closeTimeout = Duration(seconds: 1);
+
   /// Establishes a connection to a live generation service.
   ///
   /// This function handles the WebSocket connection setup and returns an [LiveSession]
@@ -154,10 +160,19 @@ class LiveSession {
     final ws = kIsWeb
         ? WebSocketChannel.connect(Uri.parse(uri))
         : IOWebSocketChannel.connect(Uri.parse(uri), headers: headers);
-    await ws.ready;
-
-    ws.sink.add(request);
-    return ws;
+    try {
+      await ws.ready.timeout(_connectionTimeout);
+      ws.sink.add(request);
+      return ws;
+    } on Object {
+      try {
+        // Queue closure even if the connection becomes ready after the timeout.
+        await ws.sink.close().timeout(_closeTimeout);
+      } on Object {
+        // Preserve the setup failure when best-effort cleanup also fails.
+      }
+      rethrow;
+    }
   }
 
   void _listenToWebSocket() {
@@ -357,21 +372,19 @@ class LiveSession {
 
   /// Closes the WebSocket connection.
   Future<void> close() async {
+    await Future.wait([
+      _closeResource(_wsSubscription.cancel, 'subscription'),
+      _closeResource(_messageController.close, 'messages'),
+      _closeResource(_ws.sink.close, 'socket'),
+    ]);
+  }
+
+  Future<void> _closeResource(
+      Future<void> Function() close, String resource) async {
     try {
-      await _wsSubscription.cancel().timeout(const Duration(seconds: 1),
-          onTimeout: () {
-        log('live_session.close: cancel timed out',
-            error: TimeoutException('Cancel timed out'));
-      });
-      if (!_messageController.isClosed) {
-        await _messageController.close();
-      }
-      await _ws.sink.close().timeout(const Duration(seconds: 1), onTimeout: () {
-        log('live_session.close: sink close timed out',
-            error: TimeoutException('Sink close timed out'));
-      });
+      await close().timeout(_closeTimeout);
     } catch (e) {
-      log('live_session.close: error during close', error: e);
+      log('live_session.close: $resource cleanup failed', error: e);
     }
   }
 
