@@ -17,12 +17,13 @@ import 'dart:convert';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'content.dart';
 import 'error.dart';
 import 'live_api.dart';
+import 'live_websocket_io.dart'
+    if (dart.library.js_interop) 'live_websocket_web.dart';
 import 'tool.dart';
 
 /// Manages asynchronous communication with Gemini model over a WebSocket
@@ -59,6 +60,12 @@ class LiveSession {
       modelString: '',
     );
   }
+
+  // Bound connection setup independently of server setup acknowledgement.
+  static const _connectionTimeout = Duration(seconds: 10);
+
+  // Cleanup must finish even when a peer or paused listener does not respond.
+  static const _closeTimeout = Duration(seconds: 1);
 
   /// Establishes a connection to a live generation service.
   ///
@@ -151,13 +158,23 @@ class LiveSession {
     };
 
     final request = jsonEncode(setupJson);
-    final ws = kIsWeb
-        ? WebSocketChannel.connect(Uri.parse(uri))
-        : IOWebSocketChannel.connect(Uri.parse(uri), headers: headers);
-    await ws.ready;
-
-    ws.sink.add(request);
-    return ws;
+    final ws = await connectWebSocket(
+      uri: Uri.parse(uri),
+      headers: headers,
+      timeout: _connectionTimeout,
+    );
+    try {
+      ws.sink.add(request);
+      return ws;
+    } on Object {
+      try {
+        // Preserve bounded cleanup if sending the setup message fails.
+        await ws.sink.close().timeout(_closeTimeout);
+      } on Object {
+        // Preserve the setup failure when best-effort cleanup also fails.
+      }
+      rethrow;
+    }
   }
 
   void _listenToWebSocket() {
@@ -357,21 +374,19 @@ class LiveSession {
 
   /// Closes the WebSocket connection.
   Future<void> close() async {
+    await Future.wait([
+      _closeResource(_wsSubscription.cancel, 'subscription'),
+      _closeResource(_messageController.close, 'messages'),
+      _closeResource(_ws.sink.close, 'socket'),
+    ]);
+  }
+
+  Future<void> _closeResource(
+      Future<void> Function() close, String resource) async {
     try {
-      await _wsSubscription.cancel().timeout(const Duration(seconds: 1),
-          onTimeout: () {
-        log('live_session.close: cancel timed out',
-            error: TimeoutException('Cancel timed out'));
-      });
-      if (!_messageController.isClosed) {
-        await _messageController.close();
-      }
-      await _ws.sink.close().timeout(const Duration(seconds: 1), onTimeout: () {
-        log('live_session.close: sink close timed out',
-            error: TimeoutException('Sink close timed out'));
-      });
+      await close().timeout(_closeTimeout);
     } catch (e) {
-      log('live_session.close: error during close', error: e);
+      log('live_session.close: $resource cleanup failed', error: e);
     }
   }
 
