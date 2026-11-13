@@ -30,18 +30,19 @@ const _apiUrlSuffixGoogleAI = 'GenerativeService/BidiGenerateContent';
 /// is in Public Preview, which means that the feature is not subject to any SLA
 /// or deprecation policy and could change in backwards-incompatible ways.
 final class LiveGenerativeModel extends BaseModel {
-  LiveGenerativeModel._(
-      {required String model,
-      required String location,
-      required FirebaseApp app,
-      required bool useAgentPlatform,
-      bool? useLimitedUseAppCheckTokens,
-      FirebaseAppCheck? appCheck,
-      FirebaseAuth? auth,
-      LiveGenerationConfig? liveGenerationConfig,
-      List<Tool>? tools,
-      Content? systemInstruction})
-      : _app = app,
+  LiveGenerativeModel._({
+    required String model,
+    required String location,
+    required FirebaseApp app,
+    required bool useAgentPlatform,
+    bool? useLimitedUseAppCheckTokens,
+    FirebaseAppCheck? appCheck,
+    FirebaseAuth? auth,
+    LiveGenerationConfig? liveGenerationConfig,
+    List<Tool>? tools,
+    Content? systemInstruction,
+    Map<String, Object?> extraConfig = const {},
+  })  : _app = app,
         _location = location,
         _useAgentPlatform = useAgentPlatform,
         _appCheck = appCheck,
@@ -50,6 +51,7 @@ final class LiveGenerativeModel extends BaseModel {
         _tools = tools,
         _systemInstruction = systemInstruction,
         _useLimitedUseAppCheckTokens = useLimitedUseAppCheckTokens,
+        _extraConfig = extraConfig,
         super._(
           serializationStrategy: AgentPlatformSerialization(),
           modelUri: useAgentPlatform
@@ -73,6 +75,7 @@ final class LiveGenerativeModel extends BaseModel {
   final List<Tool>? _tools;
   final Content? _systemInstruction;
   final bool? _useLimitedUseAppCheckTokens;
+  final Map<String, Object?> _extraConfig;
 
   String _agentPlatformUri() => 'wss://${_modelUri.baseAuthority}/'
       '$_apiUrl.${_modelUri.apiVersion}.$_apiUrlSuffixAgentPlatform/'
@@ -118,6 +121,7 @@ final class LiveGenerativeModel extends BaseModel {
       tools: _tools,
       sessionResumption: sessionResumption,
       liveGenerationConfig: _liveGenerationConfig,
+      extraConfig: _extraConfig,
     );
   }
 }
@@ -134,6 +138,7 @@ LiveGenerativeModel createLiveGenerativeModel({
   LiveGenerationConfig? liveGenerationConfig,
   List<Tool>? tools,
   Content? systemInstruction,
+  Map<String, Object?> extraConfig = const {},
 }) =>
     LiveGenerativeModel._(
       model: model,
@@ -146,4 +151,5 @@ LiveGenerativeModel createLiveGenerativeModel({
       liveGenerationConfig: liveGenerationConfig,
       tools: tools,
       systemInstruction: systemInstruction,
+      extraConfig: extraConfig,
     );
