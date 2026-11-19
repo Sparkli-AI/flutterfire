@@ -13,6 +13,7 @@
 // limitations under the License.
 import 'dart:convert';
 
+import 'package:firebase_ai/firebase_ai.dart' as public_api;
 import 'package:firebase_ai/src/api.dart';
 import 'package:firebase_ai/src/content.dart';
 import 'package:firebase_ai/src/error.dart';
@@ -22,6 +23,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('LiveAPI Tests', () {
+    test('custom live API types are publicly exported', () {
+      final tokenCount = public_api.ModalityTokenCount(
+        public_api.ContentModality.text,
+        1,
+      );
+      expect(tokenCount, isA<ModalityTokenCount>());
+      expect(tokenCount.modality, ContentModality.text);
+      expect(
+        public_api.LiveServerSetupComplete(),
+        isA<LiveServerSetupComplete>(),
+      );
+    });
+
     test('SpeechConfig toJson() returns correct JSON', () {
       final speechConfigWithVoice = SpeechConfig(voiceName: 'Aoede');
       expect(speechConfigWithVoice.toJson(), {
@@ -593,6 +607,125 @@ void main() {
       final stopMessage = LiveClientRealtimeInput.activityEnd();
       expect(stopMessage.toJson(), {
         'realtime_input': {'activity_end': {}},
+      });
+    });
+
+    test(
+      'raw data defaults to an empty map for manually created responses',
+      () {
+        expect(
+          LiveServerResponse(message: LiveServerSetupComplete()).rawData,
+          isEmpty,
+        );
+      },
+    );
+
+    test('preserves the full payload alongside parsed server content', () {
+      final json =
+          jsonDecode('''
+{
+  "serverContent": {
+    "turnComplete": true,
+    "inputTranscription": {"text": "hello", "futureField": true},
+    "generationComplete": false,
+    "futureContent": {"values": [1, "two", null]},
+    "nullable": null
+  },
+  "futureMessage": {"enabled": true},
+  "usageMetadata": {"totalTokenCount": 35}
+}''')
+              as Map<String, dynamic>;
+      final response = parseServerResponse(json);
+      final content = response.message as LiveServerContent;
+
+      expect(content.turnComplete, true);
+      expect(content.inputTranscription?.text, 'hello');
+      expect(response.usageMetadata?.totalTokenCount, 35);
+      expect(response.rawData, json);
+      expect(
+        () => response.rawData['anotherField'] = true,
+        throwsUnsupportedError,
+      );
+    });
+
+    test('parseServerMessage parses usage metadata', () {
+      final response = parseServerResponse({
+        'serverContent': {'turnComplete': true},
+        'usageMetadata': {
+          'promptTokenCount': 10,
+          'candidatesTokenCount': 25,
+          'responseTokenCount': 20,
+          'totalTokenCount': 35,
+          'promptTokensDetails': [
+            {'modality': 'TEXT', 'tokenCount': 10},
+          ],
+          'candidatesTokensDetails': [
+            {'modality': 'TEXT', 'tokenCount': 25},
+          ],
+          'responseTokensDetails': [
+            {'modality': 'AUDIO', 'tokenCount': 20},
+          ],
+        },
+      });
+
+      expect(response.usageMetadata, isNotNull);
+      expect(response.usageMetadata!.promptTokenCount, 10);
+      expect(response.usageMetadata!.candidatesTokenCount, 25);
+      expect(response.usageMetadata!.totalTokenCount, 35);
+      expect(
+        response.usageMetadata!.candidatesTokensDetails!.single.tokenCount,
+        25,
+      );
+      expect(
+        response.usageMetadata!.promptTokensDetails!.single.modality,
+        ContentModality.text,
+      );
+      expect(
+        response.usageMetadata!.promptTokensDetails!.single.tokenCount,
+        10,
+      );
+    });
+
+    test('parses Live API response token fields as candidate token usage', () {
+      final response = parseServerResponse({
+        'serverContent': {'turnComplete': true},
+        'usageMetadata': {
+          'responseTokenCount': 20,
+          'responseTokensDetails': [
+            {'modality': 'AUDIO', 'tokenCount': 20},
+          ],
+        },
+      });
+
+      final usageMetadata = response.usageMetadata!;
+      expect(usageMetadata.candidatesTokenCount, 20);
+      final details = usageMetadata.candidatesTokensDetails!.single;
+      expect(details.modality, ContentModality.audio);
+      expect(details.tokenCount, 20);
+    });
+
+    test('usage metadata is optional', () {
+      final response = parseServerResponse({'setupComplete': {}});
+      expect(response.message, isA<LiveServerSetupComplete>());
+      expect(response.usageMetadata, isNull);
+    });
+
+    test('usage metadata survives an unrecognized server message', () {
+      const json = {
+        'futureMessage': {'enabled': true},
+        'usageMetadata': {'totalTokenCount': 35},
+      };
+      final response = parseServerResponse(json);
+      expect(response.usageMetadata?.totalTokenCount, 35);
+      expect(response.rawData, json);
+    });
+
+    test('audio-stream-end signal serializes without other input fields', () {
+      expect(LiveClientRealtimeInput.audioStreamEnd().toJson(), {
+        'realtime_input': {'audio_stream_end': true},
+      });
+      expect(LiveClientRealtimeInput().toJson(), {
+        'realtime_input': <String, dynamic>{},
       });
     });
   });

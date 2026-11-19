@@ -41,6 +41,7 @@ final class LiveGenerativeModel extends BaseModel {
     this._liveGenerationConfig,
     this._tools,
     this._systemInstruction,
+    this._extraConfig = const {},
   }) : _app = app,
        _location = location,
        _useAgentPlatform = useAgentPlatform,
@@ -60,6 +61,7 @@ final class LiveGenerativeModel extends BaseModel {
   final List<Tool>? _tools;
   final Content? _systemInstruction;
   final bool? _useLimitedUseAppCheckTokens;
+  final Map<String, Object?> _extraConfig;
 
   String _agentPlatformUri() =>
       'wss://${_modelUri.baseAuthority}/'
@@ -111,6 +113,7 @@ final class LiveGenerativeModel extends BaseModel {
       tools: _tools,
       sessionResumption: sessionResumption,
       liveGenerationConfig: _liveGenerationConfig,
+      extraConfig: _extraConfig,
     );
   }
 }
@@ -127,6 +130,7 @@ LiveGenerativeModel createLiveGenerativeModel({
   LiveGenerationConfig? liveGenerationConfig,
   List<Tool>? tools,
   Content? systemInstruction,
+  Map<String, Object?> extraConfig = const {},
 }) => LiveGenerativeModel._(
   model: model,
   app: app,
@@ -138,4 +142,5 @@ LiveGenerativeModel createLiveGenerativeModel({
   liveGenerationConfig: liveGenerationConfig,
   tools: tools,
   systemInstruction: systemInstruction,
+  extraConfig: extraConfig,
 );
